@@ -260,6 +260,36 @@ def get_sesion(sesion_id):
     return jsonify(sesion.to_dict()), 200
 
 
+@test_bp.route('/sesion/<int:sesion_id>/detalle', methods=['GET'])
+@jwt_required()
+def get_sesion_detalle(sesion_id):
+    user_id = get_jwt_identity()
+
+    sesion = SesionTest.query.get(sesion_id)
+    if not sesion or str(sesion.usuario_id) != str(user_id):
+        return jsonify({'message': 'Sesion no encontrada'}), 404
+
+    vector = sesion.vector_riasec or {}
+    top_dims = obtener_top_dimensiones(vector, n=3) if vector else []
+
+    carreras = Carrera.query.filter_by(activo=True).all()
+    recomendaciones = []
+    for carrera in carreras:
+        afinidad = calcular_afinidad_carrera(vector, carrera.perfil_riasec)
+        recomendaciones.append({
+            'carrera': carrera.to_dict(),
+            'afinidad': afinidad
+        })
+    recomendaciones.sort(key=lambda x: x['afinidad'], reverse=True)
+
+    return jsonify({
+        'sesion': sesion.to_dict(),
+        'vector_riasec': vector,
+        'top_dimensiones': [{'dimension': d, 'score': s} for d, s in top_dims],
+        'recomendaciones': recomendaciones[:10]
+    }), 200
+
+
 @test_bp.route('/preguntas', methods=['GET'])
 @jwt_required()
 def get_preguntas():
