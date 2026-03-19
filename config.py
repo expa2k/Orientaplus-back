@@ -6,7 +6,7 @@ load_dotenv()
 class Config:
     SQLALCHEMY_DATABASE_URI = (
         f"mysql+pymysql://{os.getenv('DB_USER', 'root')}:"
-        f"{os.getenv('DB_PASSWORD', 'Ruben2004')}@"
+        f"{os.getenv('DB_PASSWORD', '2io2oa')}@"
         f"{os.getenv('DB_HOST', 'localhost')}:"
         f"{os.getenv('DB_PORT', '3306')}/"
         f"{os.getenv('DB_NAME', 'orientaplus')}"
