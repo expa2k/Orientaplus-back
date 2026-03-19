@@ -49,3 +49,4 @@ htmlcov/
 # Misc
 .pytest_cache/
 .mypy_cache/
+#ignorate
