@@ -253,41 +253,40 @@ def finalizar_test(sesion_id):
         texto_completo = " ".join(textos_para_gemini)
         ids_ai_puros = GeminiService.predecir_carreras_directas(texto_completo, lista_carreras)
         
-        # Le damos afinidad altísima garantizada a lo que seleccionó el NLP explícitamente
-        afinidad_ia = 95.0
         for c_id in ids_ai_puros:
             carrera_obj = Carrera.query.get(c_id)
             if carrera_obj and c_id not in ids_ya_agregados:
                 recomendaciones.append({
                     'carrera': carrera_obj.to_dict(),
-                    'afinidad': round(afinidad_ia, 1)
+                    'afinidad': calcular_afinidad_carrera(vector, carrera_obj.perfil_riasec)
                 })
                 ids_ya_agregados.add(c_id)
-                afinidad_ia -= 5.0  # La segunda opcion NLP baja a 90%, la tercera a 85%
                 
     # Luego rellenamos con las de ML si faltan para llegar a 3
     if recomendaciones_ml:
         for r_ml in recomendaciones_ml:
             c_id = r_ml['carrera']['id']
             if c_id not in ids_ya_agregados:
-                recomendaciones.append(r_ml)
-                ids_ya_agregados.add(c_id)
+                carrera_obj = Carrera.query.get(c_id)
+                if carrera_obj:
+                    recomendaciones.append({
+                        'carrera': carrera_obj.to_dict(),
+                        'afinidad': calcular_afinidad_carrera(vector, carrera_obj.perfil_riasec)
+                    })
+                    ids_ya_agregados.add(c_id)
                 
-    # Asegurar que solo mandamos top 3
-    recomendaciones = recomendaciones[:3]
-    
     if not recomendaciones:
         # Fallback al algoritmo viejo puramente deterministico
         carreras = Carrera.query.filter_by(activo=True).all()
-        recomendaciones_brutas = []
         for carrera in carreras:
-            afinidad = calcular_afinidad_carrera(vector, carrera.perfil_riasec)
-            recomendaciones_brutas.append({
+            recomendaciones.append({
                 'carrera': carrera.to_dict(),
-                'afinidad': afinidad
+                'afinidad': calcular_afinidad_carrera(vector, carrera.perfil_riasec)
             })
-        recomendaciones_brutas.sort(key=lambda x: x['afinidad'], reverse=True)
-        recomendaciones = recomendaciones_brutas[:3]
+
+    # Aseguramos que siempre estén ordenadas por su afinidad matemática real
+    recomendaciones.sort(key=lambda x: x['afinidad'], reverse=True)
+    recomendaciones = recomendaciones[:3]
 
     sesion.estado = 'completada'
     sesion.fecha_fin = datetime.utcnow()
@@ -338,20 +337,38 @@ def get_sesion_detalle(sesion_id):
     vector = sesion.vector_riasec or {}
     top_dims = obtener_top_dimensiones(vector, n=3) if vector else []
 
+    # Normalization (Scale-Invariance) for ML
+    suma_total = sum(vector.values()) if vector else 0
+    vector_normalizado = {}
+    if suma_total > 0:
+        vector_normalizado = {k: float(v)/suma_total for k, v in vector.items()}
+    else:
+        vector_normalizado = {k: 1.0/6.0 for k in (vector.keys() if vector else ['R','I','A','S','E','C'])}
+
     from app.services.ml_service import MLService
-    recomendaciones = MLService.predict_top_3(vector)
+    recomendaciones_ml = MLService.predict_top_3(vector_normalizado)
     
-    if not recomendaciones:
+    recomendaciones = []
+    
+    if recomendaciones_ml:
+        for r_ml in recomendaciones_ml:
+            c_id = r_ml['carrera']['id']
+            carrera_obj = Carrera.query.get(c_id)
+            if carrera_obj:
+                recomendaciones.append({
+                    'carrera': carrera_obj.to_dict(),
+                    'afinidad': calcular_afinidad_carrera(vector, carrera_obj.perfil_riasec)
+                })
+    else:
         carreras = Carrera.query.filter_by(activo=True).all()
-        recomendaciones_brutas = []
         for carrera in carreras:
-            afinidad = calcular_afinidad_carrera(vector, carrera.perfil_riasec)
-            recomendaciones_brutas.append({
+            recomendaciones.append({
                 'carrera': carrera.to_dict(),
-                'afinidad': afinidad
+                'afinidad': calcular_afinidad_carrera(vector, carrera.perfil_riasec)
             })
-        recomendaciones_brutas.sort(key=lambda x: x['afinidad'], reverse=True)
-        recomendaciones = recomendaciones_brutas[:3]
+            
+    recomendaciones.sort(key=lambda x: x['afinidad'], reverse=True)
+    recomendaciones = recomendaciones[:3]
 
     return jsonify({
         'sesion': sesion.to_dict(),

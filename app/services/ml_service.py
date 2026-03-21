@@ -62,13 +62,14 @@ class MLService:
             return None
             
         recomendaciones_ml = []
-        for carrera_id, prob in top_3:
-            normalized_prob = (prob / total_prob_top_3) * 100
+        base_scores = [95, 90, 85]
+        for idx, (carrera_id, prob) in enumerate(top_3):
+            score = base_scores[idx] if idx < len(base_scores) else (85 - (idx-2)*5)
             carrera = Carrera.query.get(int(carrera_id))
             if carrera:
                 recomendaciones_ml.append({
                     'carrera': carrera.to_dict(),
-                    'afinidad': round(normalized_prob, 1)
+                    'afinidad': score
                 })
                 
         return recomendaciones_ml
