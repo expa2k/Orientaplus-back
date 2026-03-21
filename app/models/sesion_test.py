@@ -23,7 +23,7 @@ class SesionTest(db.Model):
             'estado': self.estado,
             'bloque_actual': self.bloque_actual,
             'vector_riasec': self.vector_riasec,
-            'fecha_inicio': self.fecha_inicio.isoformat() if self.fecha_inicio else None,
-            'fecha_fin': self.fecha_fin.isoformat() if self.fecha_fin else None,
+            'fecha_inicio': self.fecha_inicio.isoformat() + 'Z' if self.fecha_inicio else None,
+            'fecha_fin': self.fecha_fin.isoformat() + 'Z' if self.fecha_fin else None,
             'total_respuestas': len(self.respuestas) if self.respuestas else 0
         }

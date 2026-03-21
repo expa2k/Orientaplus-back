@@ -13,6 +13,9 @@ class Carrera(db.Model):
     activo = db.Column(db.Boolean, default=True, nullable=False)
 
     def to_dict(self):
+        # Extraer automaticamente los datos de mercado para Sinaloa si existen
+        mercado_sinaloa = next((m for m in self.datos_mercado if m.estado == 'Sinaloa'), None) if getattr(self, 'datos_mercado', None) else None
+        
         return {
             'id': self.id,
             'area_id': self.area_id,
@@ -21,5 +24,7 @@ class Carrera(db.Model):
             'perfil_riasec': self.perfil_riasec,
             'campo_laboral': self.campo_laboral,
             'activo': self.activo,
-            'area_nombre': self.area.nombre if self.area else None
+            'area_nombre': self.area.nombre if self.area else None,
+            'salario_promedio': mercado_sinaloa.salario_promedio if mercado_sinaloa else None,
+            'demanda_laboral': mercado_sinaloa.demanda_laboral if mercado_sinaloa else None
         }

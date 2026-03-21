@@ -4,6 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models.pregunta_test import PreguntaTest
 from app.models.sesion_test import SesionTest
 from app.models.respuesta_test import RespuestaTest
+from app.models.mercado_regional import MercadoRegional
 from app.models.carrera import Carrera
 from app.services.motor_adaptativo import (
     calcular_vector_riasec,
@@ -130,18 +131,17 @@ def responder():
             )
             db.session.add(nueva)
 
-    db.session.flush()
-
     todas_respuestas = RespuestaTest.query.filter_by(sesion_id=sesion_id).all()
     pares = []
+    
     for r in todas_respuestas:
         pregunta = PreguntaTest.query.get(r.pregunta_id)
-        if pregunta:
+        if pregunta and str(r.valor).isdigit() and pregunta.tipo != 'abierta':
             pares.append((pregunta.dimension_riasec, r.valor))
 
     vector = calcular_vector_riasec(pares)
+            
     sesion.vector_riasec = vector
-
     db.session.commit()
 
     return jsonify({
@@ -208,20 +208,86 @@ def finalizar_test(sesion_id):
     if sesion.estado != 'en_progreso':
         return jsonify({'message': 'Esta sesión ya fue completada'}), 400
 
-    vector = sesion.vector_riasec or {}
+    vector = sesion.vector_riasec or {
+        'R': 0.0, 'I': 0.0, 'A': 0.0, 'S': 0.0, 'E': 0.0, 'C': 0.0
+    }
+
+    # Extraccion de texto
+    respuestas = RespuestaTest.query.filter_by(sesion_id=sesion_id).all()
+    textos_para_gemini = []
+    
+    for r in respuestas:
+        pregunta = PreguntaTest.query.get(r.pregunta_id)
+        if pregunta and pregunta.tipo == 'abierta' and r.valor:
+            textos_para_gemini.append(r.valor)
+
+    sesion.vector_riasec = vector
+    db.session.commit()
+
     top_dims = obtener_top_dimensiones(vector, n=3)
 
-    carreras = Carrera.query.filter_by(activo=True).all()
+    # ---------------------------------------------------------
+    # NORMALIZACION (Scale-Invariance) PARA EL MACHINE LEARNING
+    # ---------------------------------------------------------
+    suma_total = sum(vector.values())
+    vector_normalizado = {}
+    if suma_total > 0:
+        vector_normalizado = {k: float(v)/suma_total for k, v in vector.items()}
+    else:
+        vector_normalizado = {k: 1.0/6.0 for k in vector.keys()}
+
+    from app.services.ml_service import MLService
+    recomendaciones_ml = MLService.predict_top_3(vector_normalizado)
+    
+    # ---------------------------------------------------------
+    # HIBRIDIZACION: NLP Directo + Machine Learning General
+    # ---------------------------------------------------------
     recomendaciones = []
-
-    for carrera in carreras:
-        afinidad = calcular_afinidad_carrera(vector, carrera.perfil_riasec)
-        recomendaciones.append({
-            'carrera': carrera.to_dict(),
-            'afinidad': afinidad
-        })
-
-    recomendaciones.sort(key=lambda x: x['afinidad'], reverse=True)
+    ids_ya_agregados = set()
+    
+    if textos_para_gemini:
+        from app.services.gemini_service import GeminiService
+        todas_carreras_db = Carrera.query.filter_by(activo=True).all()
+        lista_carreras = [{'id': c.id, 'nombre': c.nombre} for c in todas_carreras_db]
+        
+        texto_completo = " ".join(textos_para_gemini)
+        ids_ai_puros = GeminiService.predecir_carreras_directas(texto_completo, lista_carreras)
+        
+        # Le damos afinidad altísima garantizada a lo que seleccionó el NLP explícitamente
+        afinidad_ia = 95.0
+        for c_id in ids_ai_puros:
+            carrera_obj = Carrera.query.get(c_id)
+            if carrera_obj and c_id not in ids_ya_agregados:
+                recomendaciones.append({
+                    'carrera': carrera_obj.to_dict(),
+                    'afinidad': round(afinidad_ia, 1)
+                })
+                ids_ya_agregados.add(c_id)
+                afinidad_ia -= 5.0  # La segunda opcion NLP baja a 90%, la tercera a 85%
+                
+    # Luego rellenamos con las de ML si faltan para llegar a 3
+    if recomendaciones_ml:
+        for r_ml in recomendaciones_ml:
+            c_id = r_ml['carrera']['id']
+            if c_id not in ids_ya_agregados:
+                recomendaciones.append(r_ml)
+                ids_ya_agregados.add(c_id)
+                
+    # Asegurar que solo mandamos top 3
+    recomendaciones = recomendaciones[:3]
+    
+    if not recomendaciones:
+        # Fallback al algoritmo viejo puramente deterministico
+        carreras = Carrera.query.filter_by(activo=True).all()
+        recomendaciones_brutas = []
+        for carrera in carreras:
+            afinidad = calcular_afinidad_carrera(vector, carrera.perfil_riasec)
+            recomendaciones_brutas.append({
+                'carrera': carrera.to_dict(),
+                'afinidad': afinidad
+            })
+        recomendaciones_brutas.sort(key=lambda x: x['afinidad'], reverse=True)
+        recomendaciones = recomendaciones_brutas[:3]
 
     sesion.estado = 'completada'
     sesion.fecha_fin = datetime.utcnow()
@@ -231,8 +297,8 @@ def finalizar_test(sesion_id):
         'sesion': sesion.to_dict(),
         'vector_riasec': vector,
         'top_dimensiones': [{'dimension': d, 'score': s} for d, s in top_dims],
-        'recomendaciones': recomendaciones[:10],
-        'mensaje': 'Test completado exitosamente'
+        'recomendaciones': recomendaciones,
+        'mensaje': 'Test completado exitosamente (Modelos de IA aplicados)'
     }), 200
 
 
@@ -272,21 +338,26 @@ def get_sesion_detalle(sesion_id):
     vector = sesion.vector_riasec or {}
     top_dims = obtener_top_dimensiones(vector, n=3) if vector else []
 
-    carreras = Carrera.query.filter_by(activo=True).all()
-    recomendaciones = []
-    for carrera in carreras:
-        afinidad = calcular_afinidad_carrera(vector, carrera.perfil_riasec)
-        recomendaciones.append({
-            'carrera': carrera.to_dict(),
-            'afinidad': afinidad
-        })
-    recomendaciones.sort(key=lambda x: x['afinidad'], reverse=True)
+    from app.services.ml_service import MLService
+    recomendaciones = MLService.predict_top_3(vector)
+    
+    if not recomendaciones:
+        carreras = Carrera.query.filter_by(activo=True).all()
+        recomendaciones_brutas = []
+        for carrera in carreras:
+            afinidad = calcular_afinidad_carrera(vector, carrera.perfil_riasec)
+            recomendaciones_brutas.append({
+                'carrera': carrera.to_dict(),
+                'afinidad': afinidad
+            })
+        recomendaciones_brutas.sort(key=lambda x: x['afinidad'], reverse=True)
+        recomendaciones = recomendaciones_brutas[:3]
 
     return jsonify({
         'sesion': sesion.to_dict(),
         'vector_riasec': vector,
         'top_dimensiones': [{'dimension': d, 'score': s} for d, s in top_dims],
-        'recomendaciones': recomendaciones[:10]
+        'recomendaciones': recomendaciones
     }), 200
 
 
@@ -299,3 +370,4 @@ def get_preguntas():
         query = query.filter_by(bloque=bloque)
     preguntas = query.order_by(PreguntaTest.bloque, PreguntaTest.orden).all()
     return jsonify([p.to_dict() for p in preguntas]), 200
+

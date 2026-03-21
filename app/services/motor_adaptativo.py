@@ -40,24 +40,33 @@ def obtener_dimensiones_ambiguas(vector_riasec, umbral=0.5):
     return ambiguas
 
 
-def decidir_siguiente_bloque(vector_riasec, bloque_actual, total_bloques=2):
-    if bloque_actual < total_bloques:
-        ambiguas = obtener_dimensiones_ambiguas(vector_riasec)
+def decidir_siguiente_bloque(vector_riasec, bloque_actual, total_bloques=3):
+    if not vector_riasec:
+        return {'accion': 'continuar', 'siguiente_bloque': bloque_actual + 1, 'dimensiones_foco': [], 'perfil_claro': False}
 
-        if ambiguas:
-            return {
-                'accion': 'continuar',
-                'siguiente_bloque': bloque_actual + 1,
-                'dimensiones_foco': ambiguas,
-                'perfil_claro': False
-            }
-        else:
-            return {
-                'accion': 'continuar',
-                'siguiente_bloque': bloque_actual + 1,
-                'dimensiones_foco': [],
-                'perfil_claro': True
-            }
+    if bloque_actual == 1:
+        # Fase Exploratoria terminada -> Filtrar a las mejores 3 familias de carreras
+        top_3_tuplas = obtener_top_dimensiones(vector_riasec, n=3)
+        top_3 = [dim for dim, score in top_3_tuplas]
+        
+        return {
+            'accion': 'continuar',
+            'siguiente_bloque': 2,
+            'dimensiones_foco': top_3,
+            'perfil_claro': False
+        }
+        
+    elif bloque_actual == 2:
+        # Fase de Descubrimiento terminada -> Batalla cara a cara entre las TOP 2
+        top_2_tuplas = obtener_top_dimensiones(vector_riasec, n=2)
+        top_2 = [dim for dim, score in top_2_tuplas]
+        
+        return {
+            'accion': 'continuar',
+            'siguiente_bloque': 3,
+            'dimensiones_foco': top_2,
+            'perfil_claro': False
+        }
 
     return {
         'accion': 'finalizar',

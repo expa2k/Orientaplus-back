@@ -8,7 +8,7 @@ class RespuestaTest(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     sesion_id = db.Column(db.Integer, db.ForeignKey('sesiones_test.id'), nullable=False)
     pregunta_id = db.Column(db.Integer, db.ForeignKey('preguntas_test.id'), nullable=False)
-    valor = db.Column(db.String(10), nullable=False)
+    valor = db.Column(db.Text, nullable=False)
     fecha_respuesta = db.Column(db.DateTime, default=datetime.utcnow)
 
     pregunta = db.relationship('PreguntaTest', lazy=True)

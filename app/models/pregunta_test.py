@@ -6,7 +6,7 @@ class PreguntaTest(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     bloque = db.Column(db.Integer, nullable=False, default=1)
-    tipo = db.Column(db.Enum('likert', 'opcion_multiple'), nullable=False, default='likert')
+    tipo = db.Column(db.Enum('likert', 'opcion_multiple', 'abierta'), nullable=False, default='likert')
     texto = db.Column(db.Text, nullable=False)
     opciones = db.Column(db.JSON, default=None)
     dimension_riasec = db.Column(db.String(1), nullable=False)
