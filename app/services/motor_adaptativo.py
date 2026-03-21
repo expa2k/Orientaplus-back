@@ -99,5 +99,11 @@ def calcular_afinidad_carrera(vector_estudiante, perfil_carrera):
     if max_ponderado == 0:
         return 0.0
 
-    afinidad = (score_total / max_ponderado) * 100
-    return round(min(afinidad, 100.0), 1)
+    afinidad_bruta = (score_total / max_ponderado) * 100
+    
+    # "Disfrazar de bonito": Mapeamos la afinidad cruda (que suele estar entre 30% y 60%)
+    # a la escala visual atractiva de 75% a 98%, conservando la distancia matemática real.
+    afinidad = 75.0 + (afinidad_bruta / 60.0) * 23.0
+    afinidad = min(afinidad, 99.9)
+    
+    return round(afinidad, 1)
