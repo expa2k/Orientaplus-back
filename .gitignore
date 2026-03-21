@@ -50,3 +50,9 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 #ignorate
+# Modelos de Machine Learning y datasets pesados generados por scripts
+*.joblib
+*.csv
+machine_learning/modelo_rf.joblib
+machine_learning/modelo_knn.joblib
+scripts_utiles/dataset_sintetico.csv
