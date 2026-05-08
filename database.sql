@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS sesiones_test (
     estado          ENUM('en_progreso', 'completada', 'abandonada') NOT NULL DEFAULT 'en_progreso',
     bloque_actual   INT          NOT NULL DEFAULT 1,
     vector_riasec   JSON         DEFAULT NULL,
+    recomendaciones JSON         DEFAULT NULL,
     fecha_inicio    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_fin       DATETIME     DEFAULT NULL,
 

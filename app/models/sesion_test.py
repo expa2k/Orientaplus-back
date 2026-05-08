@@ -11,6 +11,7 @@ class SesionTest(db.Model):
                        nullable=False, default='en_progreso')
     bloque_actual = db.Column(db.Integer, nullable=False, default=1)
     vector_riasec = db.Column(db.JSON, default=None)
+    recomendaciones = db.Column(db.JSON, default=None)
     fecha_inicio = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_fin = db.Column(db.DateTime, default=None)
 
@@ -23,6 +24,7 @@ class SesionTest(db.Model):
             'estado': self.estado,
             'bloque_actual': self.bloque_actual,
             'vector_riasec': self.vector_riasec,
+            'recomendaciones': self.recomendaciones,
             'fecha_inicio': self.fecha_inicio.isoformat() + 'Z' if self.fecha_inicio else None,
             'fecha_fin': self.fecha_fin.isoformat() + 'Z' if self.fecha_fin else None,
             'total_respuestas': len(self.respuestas) if self.respuestas else 0

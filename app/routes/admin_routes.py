@@ -74,15 +74,20 @@ def get_resultado_detalle(sesion_id):
             'fecha': r.fecha_respuesta.isoformat() if r.fecha_respuesta else None
         })
 
-    carreras = Carrera.query.filter_by(activo=True).all()
-    recomendaciones = []
-    for carrera in carreras:
-        afinidad = calcular_afinidad_carrera(vector, carrera.perfil_riasec)
-        recomendaciones.append({
-            'carrera': carrera.to_dict(),
-            'afinidad': afinidad
-        })
-    recomendaciones.sort(key=lambda x: x['afinidad'], reverse=True)
+    # Prioridad a las recomendaciones guardadas
+    if sesion.recomendaciones:
+        recomendaciones_finales = sesion.recomendaciones
+    else:
+        carreras = Carrera.query.filter_by(activo=True).all()
+        recomendaciones_finales = []
+        for carrera in carreras:
+            afinidad = calcular_afinidad_carrera(vector, carrera.perfil_riasec)
+            recomendaciones_finales.append({
+                'carrera': carrera.to_dict(),
+                'afinidad': afinidad
+            })
+        recomendaciones_finales.sort(key=lambda x: x['afinidad'], reverse=True)
+        recomendaciones_finales = recomendaciones_finales[:10]
 
     return jsonify({
         'sesion': sesion.to_dict(),
@@ -94,7 +99,7 @@ def get_resultado_detalle(sesion_id):
         'vector_riasec': vector,
         'top_dimensiones': [{'dimension': d, 'score': s} for d, s in top_dims],
         'respuestas': respuestas_detalle,
-        'recomendaciones': recomendaciones[:10]
+        'recomendaciones': recomendaciones_finales
     }), 200
 
 

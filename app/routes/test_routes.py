@@ -256,9 +256,14 @@ def finalizar_test(sesion_id):
         for c_id in ids_ai_puros:
             carrera_obj = Carrera.query.get(c_id)
             if carrera_obj and c_id not in ids_ya_agregados:
+                # Bonus IA: Le sumamos un 20% de afinidad base para que pesen mas que el RIASEC
+                afinidad_base = calcular_afinidad_carrera(vector, carrera_obj.perfil_riasec)
+                afinidad_con_bonus = min(afinidad_base + 20.0, 99.9)
+                
                 recomendaciones.append({
                     'carrera': carrera_obj.to_dict(),
-                    'afinidad': calcular_afinidad_carrera(vector, carrera_obj.perfil_riasec)
+                    'afinidad': afinidad_con_bonus,
+                    'es_ia': True
                 })
                 ids_ya_agregados.add(c_id)
                 
@@ -284,10 +289,11 @@ def finalizar_test(sesion_id):
                 'afinidad': calcular_afinidad_carrera(vector, carrera.perfil_riasec)
             })
 
-    # Aseguramos que siempre estén ordenadas por su afinidad matemática real
+    # Aseguramos que siempre estén ordenadas por su afinidad final (incluyendo bonus)
     recomendaciones.sort(key=lambda x: x['afinidad'], reverse=True)
     recomendaciones = recomendaciones[:3]
 
+    sesion.recomendaciones = recomendaciones
     sesion.estado = 'completada'
     sesion.fecha_fin = datetime.utcnow()
     db.session.commit()
@@ -336,6 +342,14 @@ def get_sesion_detalle(sesion_id):
 
     vector = sesion.vector_riasec or {}
     top_dims = obtener_top_dimensiones(vector, n=3) if vector else []
+
+    if sesion.recomendaciones:
+        return jsonify({
+            'sesion': sesion.to_dict(),
+            'vector_riasec': vector,
+            'top_dimensiones': [{'dimension': d, 'score': s} for d, s in top_dims],
+            'recomendaciones': sesion.recomendaciones
+        }), 200
 
     # Normalization (Scale-Invariance) for ML
     suma_total = sum(vector.values()) if vector else 0
