@@ -106,13 +106,20 @@ def get_resultado_detalle(sesion_id):
 @admin_bp.route('/estadisticas', methods=['GET'])
 @admin_required
 def get_estadisticas():
+    from datetime import datetime, timedelta
+    from collections import Counter
+
     total_sesiones = SesionTest.query.count()
     completadas = SesionTest.query.filter_by(estado='completada').count()
     en_progreso = SesionTest.query.filter_by(estado='en_progreso').count()
     abandonadas = SesionTest.query.filter_by(estado='abandonada').count()
 
     sesiones_completadas = SesionTest.query.filter_by(estado='completada').all()
+
     distribucion_riasec = {'R': 0, 'I': 0, 'A': 0, 'S': 0, 'E': 0, 'C': 0}
+    suma_vector = {'R': 0.0, 'I': 0.0, 'A': 0.0, 'S': 0.0, 'E': 0.0, 'C': 0.0}
+    duraciones = []
+    carrera_counter = Counter()
 
     for sesion in sesiones_completadas:
         vector = sesion.vector_riasec or {}
@@ -120,6 +127,44 @@ def get_estadisticas():
             top = obtener_top_dimensiones(vector, n=1)
             if top:
                 distribucion_riasec[top[0][0]] += 1
+            for dim in 'RIASEC':
+                suma_vector[dim] += vector.get(dim, 0.0)
+
+        if sesion.fecha_inicio and sesion.fecha_fin:
+            delta = (sesion.fecha_fin - sesion.fecha_inicio).total_seconds() / 60
+            if 0 < delta < 120:
+                duraciones.append(delta)
+
+        if sesion.recomendaciones:
+            for rec in sesion.recomendaciones:
+                nombre = rec.get('carrera', {}).get('nombre')
+                if nombre:
+                    carrera_counter[nombre] += 1
+
+    n = len(sesiones_completadas)
+    vector_promedio = {dim: round(suma_vector[dim] / n, 2) for dim in 'RIASEC'} if n > 0 else {dim: 0.0 for dim in 'RIASEC'}
+    tiempo_promedio = round(sum(duraciones) / len(duraciones), 1) if duraciones else 0
+
+    carreras_top = [{'nombre': nombre, 'frecuencia': freq} for nombre, freq in carrera_counter.most_common(5)]
+
+    ahora = datetime.utcnow()
+    tests_por_mes = []
+    for i in range(5, -1, -1):
+        fecha_ref = ahora - timedelta(days=30 * i)
+        mes_inicio = fecha_ref.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if mes_inicio.month == 12:
+            mes_fin = mes_inicio.replace(year=mes_inicio.year + 1, month=1)
+        else:
+            mes_fin = mes_inicio.replace(month=mes_inicio.month + 1)
+        count = SesionTest.query.filter(
+            SesionTest.estado == 'completada',
+            SesionTest.fecha_fin >= mes_inicio,
+            SesionTest.fecha_fin < mes_fin
+        ).count()
+        tests_por_mes.append({
+            'mes': mes_inicio.strftime('%b %Y'),
+            'total': count
+        })
 
     return jsonify({
         'total_sesiones': total_sesiones,
@@ -127,5 +172,9 @@ def get_estadisticas():
         'en_progreso': en_progreso,
         'abandonadas': abandonadas,
         'tasa_completado': round((completadas / total_sesiones * 100), 1) if total_sesiones > 0 else 0,
-        'distribucion_perfiles': distribucion_riasec
+        'distribucion_perfiles': distribucion_riasec,
+        'vector_promedio': vector_promedio,
+        'tiempo_promedio_minutos': tiempo_promedio,
+        'carreras_top': carreras_top,
+        'tests_por_mes': tests_por_mes
     }), 200
