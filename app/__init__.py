@@ -11,7 +11,7 @@ def create_app():
 
     db.init_app(app)
     jwt.init_app(app)
-    cors.init_app(app, resources={r'/api/*': {'origins': 'http://localhost:4200'}})
+    cors.init_app(app, resources={r'/api/*': {'origins': '*'}})
 
     from app.routes.auth_routes import auth_bp
     from app.routes.user_routes import user_bp
