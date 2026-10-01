@@ -1,9 +1,12 @@
 import os
+import certifi
 from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Config:
+    # URL de conexión (conservando tu estructura original)
     SQLALCHEMY_DATABASE_URI = (
         f"mysql+pymysql://{os.getenv('DB_USER', 'root')}:"
         f"{os.getenv('DB_PASSWORD', '2io2oa')}@"
@@ -11,6 +14,17 @@ class Config:
         f"{os.getenv('DB_PORT', '3306')}/"
         f"{os.getenv('DB_NAME', 'orientaplus')}"
     )
+
+    # Esta es la parte NUEVA obligatoria para la conexión segura de TiDB
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "connect_args": {
+            "ssl": {
+                "ca": certifi.where()
+            }
+        }
+    }
+
+    # Configuraciones que ya tenías y que DEBES conservar
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'dev_secret')
     JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 86400))

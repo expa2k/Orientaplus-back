@@ -6,3 +6,5 @@ pymysql
 bcrypt
 python-dotenv
 google-generativeai
+gunicorn
+certifi
