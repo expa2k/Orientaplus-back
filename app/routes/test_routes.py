@@ -29,9 +29,28 @@ def iniciar_test():
     ).first()
 
     if sesion_activa and not forzar_nuevo:
-        preguntas = PreguntaTest.query.filter_by(
+        query = PreguntaTest.query.filter_by(
             bloque=sesion_activa.bloque_actual, activo=True
-        ).order_by(PreguntaTest.orden).all()
+        )
+
+        # Recuperamos el mismo "foco" que tenía el test: se calcula solo con
+        # las respuestas de los bloques ANTERIORES (igual que en /siguiente)
+        if sesion_activa.bloque_actual > 1:
+            pares = []
+            for r in sesion_activa.respuestas:
+                p = PreguntaTest.query.get(r.pregunta_id)
+                if (p and p.bloque < sesion_activa.bloque_actual
+                        and p.tipo != 'abierta' and str(r.valor).isdigit()):
+                    pares.append((p.dimension_riasec, r.valor))
+
+            vector_prev = calcular_vector_riasec(pares)
+            decision = decidir_siguiente_bloque(vector_prev, sesion_activa.bloque_actual - 1)
+            if decision['dimensiones_foco']:
+                query = query.filter(
+                    PreguntaTest.dimension_riasec.in_(decision['dimensiones_foco'])
+                )
+
+        preguntas = query.order_by(PreguntaTest.orden).all()
 
         respondidas = [r.pregunta_id for r in sesion_activa.respuestas]
         respuestas_guardadas = {r.pregunta_id: r.valor for r in sesion_activa.respuestas}

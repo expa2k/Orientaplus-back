@@ -9,10 +9,6 @@ import joblib
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import create_app
-
-app = create_app()
-
 def entrenar_modelos():
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'machine_learning'))
     csv_path = os.path.join(base_dir, 'dataset_sintetico_uas.csv')
@@ -38,7 +34,7 @@ def entrenar_modelos():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     print("Optimizando hiperparametros de Random Forest (puede tomar un minuto o dos)...")
-    rf_param_grid = {'n_estimators': [100, 200], 'max_depth': [None, 10, 20], 'min_samples_split': [2, 5]}
+    rf_param_grid = {'n_estimators': [100], 'max_depth': [10, 12], 'min_samples_leaf': [3, 5]}
     rf_base = RandomForestClassifier(random_state=42)
     rf_grid = GridSearchCV(rf_base, rf_param_grid, cv=3, n_jobs=-1)
     rf_grid.fit(X_train, y_train)
@@ -61,12 +57,11 @@ def entrenar_modelos():
     
     rf_model_path = os.path.join(base_dir, 'modelo_rf.joblib')
     knn_model_path = os.path.join(base_dir, 'modelo_knn.joblib')
-    
-    joblib.dump(rf_clf, rf_model_path)
-    joblib.dump(knn_clf, knn_model_path)
+
+    joblib.dump(rf_clf, rf_model_path, compress=3)
+    joblib.dump(knn_clf, knn_model_path, compress=3)
     
     print("Modelos exportados correctamente a formato .joblib")
 
 if __name__ == '__main__':
-    with app.app_context():
-        entrenar_modelos()
+    entrenar_modelos()
